@@ -8,7 +8,7 @@ class WebSocketManager {
   constructor(serverUrl) {
     // Estado da conexão
     this.socket = null;
-    this.serverUrl = serverUrl || "ws://localhost:8081/";
+    this.serverUrl = serverUrl || "ws://localhost:8080/";
     this.isConnected = false;
     this.isConnecting = false;
     this.eventId = 0;
@@ -241,7 +241,6 @@ class WebSocketManager {
         case "response.text.delta":
           // Processa o delta de texto
           if (this.onTextResponse) {
-            console.log("Texto delta recebido:", data.delta);
             this.onTextResponse(data.delta, false);
           }
           break;
@@ -249,7 +248,6 @@ class WebSocketManager {
         case "response.text.done":
           // Processa o fim do texto
           if (this.onTextResponse) {
-            console.log("Texto completo recebido:", data.text);
             this.onTextResponse(data.text, true);
           }
           break;
@@ -266,7 +264,6 @@ class WebSocketManager {
         case "response.audio.done":
           // Sinaliza que o streaming de áudio terminou
           if (this.onAudioResponse) {
-            console.log("Áudio completo recebido:", data.audio);
             this.onAudioResponse(null, true);
           }
           break;
@@ -388,7 +385,7 @@ class WebSocketManager {
     // Incrementa o contador de buffers pendentes
     this.pendingAudioBuffers++;
 
-    // Converte para base64
+    // Converte os dados de áudio para base64
     const base64Audio = this.arrayToBase64(audioData);
 
     const message = {
@@ -396,8 +393,7 @@ class WebSocketManager {
       audio: base64Audio,
     };
 
-    // Log mais detalhado para depuração
-    logger.debug(`Enviando buffer de áudio (${audioData.length} amostras)`);
+    console.log(`Enviando buffer de áudio (${audioData.length} amostras)`);
 
     return this.sendMessage(message);
   }
@@ -473,21 +469,30 @@ class WebSocketManager {
    * @returns {string} - String em Base64
    */
   arrayToBase64(buffer) {
-    // Garantir que estamos trabalhando com Uint8Array
+    // Garantir que estamos trabalhando com Uint8Array para conversão correta
     let bytes;
+
     if (buffer instanceof Int16Array) {
-      bytes = new Uint8Array(buffer.buffer);
+      // Converte diretamente o buffer de Int16Array para Uint8Array preservando os bytes
+      bytes = new Uint8Array(
+        buffer.buffer,
+        buffer.byteOffset,
+        buffer.byteLength
+      );
     } else if (buffer instanceof Uint8Array) {
       bytes = buffer;
     } else {
       bytes = new Uint8Array(buffer);
     }
 
+    // Converter para string binária
     let binary = "";
     const len = bytes.byteLength;
     for (let i = 0; i < len; i++) {
       binary += String.fromCharCode(bytes[i]);
     }
+
+    // Codificar em base64
     return window.btoa(binary);
   }
 

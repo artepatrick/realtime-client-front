@@ -71,10 +71,10 @@ document.addEventListener("DOMContentLoaded", () => {
   webSocketManager.onAudioResponse = (audioData, isDone) => {
     // Se temos dados de áudio, adiciona à fila de reprodução
     if (audioData) {
-      logger.debug(`Dados de áudio recebidos: ${audioData.length} bytes`);
+      console.log(`Dados de áudio recebidos: ${audioData.length} bytes`);
       audioManager.enqueueAudio(audioData);
-    } else {
-      logger.warning("Dados de áudio vazios recebidos do servidor");
+    } else if (isDone) {
+      logger.info("Reprodução de áudio concluída");
     }
   };
 
@@ -82,9 +82,18 @@ document.addEventListener("DOMContentLoaded", () => {
   audioManager.onAudioData = (audioData) => {
     // Envia os dados de áudio para o servidor
     if (webSocketManager.isConnected && isRecording) {
-      webSocketManager.appendAudioBuffer(audioData);
-      audioBufferHasData = true; // Marca que áudio foi enviado
-      logger.debug(`Dados de áudio enviados: ${audioData.length} bytes`);
+      // Verifica se há dados de áudio válidos
+      if (audioData && audioData.length > 0) {
+        const success = webSocketManager.appendAudioBuffer(audioData);
+        if (success) {
+          audioBufferHasData = true; // Marca que áudio foi enviado com sucesso
+          console.log(`Dados de áudio enviados: ${audioData.length} amostras`);
+        } else {
+          logger.error("Falha ao enviar dados de áudio");
+        }
+      } else {
+        logger.warning("Tentativa de enviar dados de áudio vazios");
+      }
     }
   };
 
@@ -100,6 +109,8 @@ document.addEventListener("DOMContentLoaded", () => {
     // Adiciona uma nova mensagem do usuário
     currentUserMessage = "Gravando...";
     createUserMessage(currentUserMessage);
+
+    logger.info("Gravação iniciada, enviando áudio para o servidor");
   };
 
   audioManager.onRecordingStop = () => {
@@ -110,11 +121,11 @@ document.addEventListener("DOMContentLoaded", () => {
     startBtn.disabled = false;
     stopBtn.disabled = true;
 
-    // Atualiza a mensagem do usuário
+    // Confirma o buffer de áudio somente se dados foram enviados
     if (audioBufferHasData) {
-      currentUserMessage = "Mensagem de voz enviada";
-      // Confirma o buffer de áudio com o servidor
+      logger.info("Enviando comando para processar o áudio");
       webSocketManager.commitAudioBuffer();
+      currentUserMessage = "Mensagem de voz enviada";
     } else {
       currentUserMessage = "Nenhum áudio foi enviado nesta gravação";
       logger.warning("Nenhum áudio foi enviado nesta gravação");
@@ -153,8 +164,12 @@ document.addEventListener("DOMContentLoaded", () => {
   function startRecording() {
     if (isRecording) return;
 
-    logger.info("Iniciando gravação...");
-    audioManager.startRecording();
+    logger.info("Iniciando gravação de áudio...");
+    // Limpar qualquer buffer de áudio pendente
+    webSocketManager.clearAudioBuffer();
+    audioManager.startRecording().catch((error) => {
+      logger.error(`Erro ao iniciar gravação: ${error.message}`);
+    });
   }
 
   // Função para parar a gravação

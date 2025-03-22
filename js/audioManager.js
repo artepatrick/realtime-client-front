@@ -30,13 +30,15 @@ class AudioManager {
    */
   async initialize() {
     try {
-      // Criar AudioContext
-      this.audioContext = new (window.AudioContext ||
-        window.webkitAudioContext)({
-        sampleRate: this.sampleRate,
+      // Criar AudioContext com a taxa de amostragem correta
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      this.audioContext = new AudioContext({
+        sampleRate: this.sampleRate, // Usar a taxa de amostragem necessária
       });
 
-      logger.info("Sistema de áudio inicializado");
+      logger.info(
+        `Sistema de áudio inicializado com taxa de amostragem ${this.audioContext.sampleRate}Hz`
+      );
       return true;
     } catch (error) {
       logger.error(`Erro ao inicializar o sistema de áudio: ${error.message}`);
@@ -54,70 +56,74 @@ class AudioManager {
     }
 
     try {
-      // Solicitar acesso ao microfone
+      // Verificar se o AudioContext está suspenso (pode acontecer devido a políticas do navegador)
+      if (this.audioContext && this.audioContext.state === "suspended") {
+        await this.audioContext.resume();
+        logger.info("AudioContext retomado");
+      }
+
+      // Solicitar acesso ao microfone com configurações específicas
       this.mediaStream = await navigator.mediaDevices.getUserMedia({
         audio: {
-          channelCount: 1, // Mono
-          echoCancellation: true, // Redução de eco
-          noiseSuppression: true, // Supressão de ruído
-          autoGainControl: true, // Controle automático de ganho
-          sampleRate: this.sampleRate,
+          channelCount: 1, // Mono (obrigatório para a API OpenAI)
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
         },
       });
 
-      // Criar o script processor node para processar áudio
+      logger.info("Acesso ao microfone obtido");
+
+      // Criar fonte de áudio a partir do stream do microfone
       const sourceNode = this.audioContext.createMediaStreamSource(
         this.mediaStream
       );
 
-      // Verificar se AudioWorkletNode está disponível (API mais moderna)
-      let processorNode;
+      // Criar processador de script para capturar dados de áudio
+      const processorNode = this.audioContext.createScriptProcessor(
+        this.bufferSize,
+        1, // Um canal de entrada (mono)
+        1 // Um canal de saída (mono)
+      );
 
-      if (this.audioContext.audioWorklet) {
-        // Implementação com AudioWorklet será adicionada em versão futura
-        // Por agora, usamos ScriptProcessorNode que ainda é bem suportado
-        processorNode = this.audioContext.createScriptProcessor(
-          this.bufferSize,
-          1,
-          1
-        );
-      } else {
-        // Fallback para ScriptProcessorNode
-        processorNode = this.audioContext.createScriptProcessor(
-          this.bufferSize,
-          1,
-          1
-        );
-      }
-
-      // Função para processar o áudio capturado
-      processorNode.onaudioprocess = (e) => {
+      // Configurar o callback de processamento de áudio
+      processorNode.onaudioprocess = (audioProcessingEvent) => {
         if (!this.isRecording) return;
 
-        // Obter os dados de áudio do buffer
-        const inputBuffer = e.inputBuffer;
+        // Obter os dados do buffer de entrada
+        const inputBuffer = audioProcessingEvent.inputBuffer;
         const inputData = inputBuffer.getChannelData(0);
 
-        // Converter para Int16 (PCM16)
-        const pcmData = this.floatTo16BitPCM(inputData);
+        // Verificar se há dados de áudio (não silêncio total)
+        const hasAudio = inputData.some((sample) => Math.abs(sample) > 0.01);
 
-        // Enviar os dados de áudio via callback
-        if (this.onAudioData) {
-          this.onAudioData(pcmData);
+        if (hasAudio) {
+          // Converter para Int16 (PCM16) - formato requerido pela API
+          const pcmData = this.floatTo16BitPCM(inputData);
+
+          // Enviar dados para o callback
+          if (this.onAudioData) {
+            this.onAudioData(pcmData);
+          }
         }
       };
 
-      // Conectar os nós
+      // Conectar os nós de processamento de áudio
       sourceNode.connect(processorNode);
       processorNode.connect(this.audioContext.destination);
 
-      // Atualizar o estado
+      // Salvar referências para limpeza posterior
+      this.recorder = {
+        sourceNode,
+        processorNode,
+      };
+
+      // Atualizar estado
       this.isRecording = true;
-      this.recorder = { sourceNode, processorNode };
 
-      logger.success("Gravação iniciada");
+      logger.success("Gravação iniciada com sucesso");
 
-      // Chamar o callback de início de gravação
+      // Notificar início da gravação
       if (this.onRecordingStart) {
         this.onRecordingStart();
       }
@@ -139,23 +145,25 @@ class AudioManager {
     }
 
     try {
-      // Desconectar e limpar os nós
-      this.recorder.sourceNode.disconnect();
-      this.recorder.processorNode.disconnect();
+      // Desconectar nós de áudio
+      if (this.recorder) {
+        this.recorder.sourceNode.disconnect();
+        this.recorder.processorNode.disconnect();
+      }
 
-      // Parar todas as faixas do stream
+      // Parar todas as faixas de mídia
       if (this.mediaStream) {
         this.mediaStream.getTracks().forEach((track) => track.stop());
       }
 
-      // Atualizar o estado
+      // Limpar estado
       this.isRecording = false;
       this.recorder = null;
       this.mediaStream = null;
 
       logger.info("Gravação interrompida");
 
-      // Chamar o callback de fim de gravação
+      // Notificar fim da gravação
       if (this.onRecordingStop) {
         this.onRecordingStop();
       }
@@ -250,7 +258,9 @@ class AudioManager {
   floatTo16BitPCM(input) {
     const output = new Int16Array(input.length);
     for (let i = 0; i < input.length; i++) {
+      // Limitar os valores entre -1 e 1
       const s = Math.max(-1, Math.min(1, input[i]));
+      // Converter para Int16 (PCM16)
       output[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
     }
     return output;
@@ -265,30 +275,21 @@ class AudioManager {
     // Se input é Uint8Array, converte para Int16Array
     let int16Data;
     if (input instanceof Uint8Array) {
-      int16Data = new Int16Array(input.buffer);
+      int16Data = new Int16Array(
+        input.buffer,
+        input.byteOffset,
+        input.byteLength / 2
+      );
     } else {
       int16Data = input;
     }
 
     const float32Data = new Float32Array(int16Data.length);
     for (let i = 0; i < int16Data.length; i++) {
+      // Normalizar valores para entre -1 e 1 (formato Float32)
       float32Data[i] = int16Data[i] / (int16Data[i] < 0 ? 0x8000 : 0x7fff);
     }
     return float32Data;
-  }
-
-  /**
-   * Converte array em Base64
-   * @param {Uint8Array|Int16Array} buffer - Buffer de dados
-   * @returns {string} - String em Base64
-   */
-  arrayToBase64(buffer) {
-    const bytes = new Uint8Array(buffer.buffer);
-    let binary = "";
-    for (let i = 0; i < bytes.byteLength; i++) {
-      binary += String.fromCharCode(bytes[i]);
-    }
-    return window.btoa(binary);
   }
 }
 
