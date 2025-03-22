@@ -23,10 +23,8 @@ class WebSocketManager {
     this.conversationId = null;
     this.currentResponseId = null;
 
-    // Buffer de áudio
-    this.audioBufferSize = 0; // Tamanho atual do buffer em bytes
-    this.minAudioBufferMs = 100; // Mínimo requerido pela API (100ms)
-    this.sampleRate = 24000; // Sample rate em Hz
+    // Estado do buffer de áudio
+    this.pendingAudioBuffers = 0;
 
     // Referência para os elementos da UI
     this.statusElement = document.querySelector(".connection-status");
@@ -97,7 +95,7 @@ class WebSocketManager {
     this.sessionId = null;
     this.conversationId = null;
     this.currentResponseId = null;
-    this.audioBufferSize = 0;
+    this.pendingAudioBuffers = 0;
 
     // Chamar o callback de desconexão
     if (this.onDisconnect) {
@@ -243,6 +241,7 @@ class WebSocketManager {
         case "response.text.delta":
           // Processa o delta de texto
           if (this.onTextResponse) {
+            console.log("Texto delta recebido:", data.delta);
             this.onTextResponse(data.delta, false);
           }
           break;
@@ -250,6 +249,7 @@ class WebSocketManager {
         case "response.text.done":
           // Processa o fim do texto
           if (this.onTextResponse) {
+            console.log("Texto completo recebido:", data.text);
             this.onTextResponse(data.text, true);
           }
           break;
@@ -266,6 +266,7 @@ class WebSocketManager {
         case "response.audio.done":
           // Sinaliza que o streaming de áudio terminou
           if (this.onAudioResponse) {
+            console.log("Áudio completo recebido:", data.audio);
             this.onAudioResponse(null, true);
           }
           break;
@@ -289,7 +290,7 @@ class WebSocketManager {
    */
   handleSessionCreated(data) {
     this.sessionId = data.session.id;
-    logger.success(`Sessão OpenAI criada: ${this.sessionId}`);
+    logger.success(`Sessão criada: ${this.sessionId}`);
 
     // Configura as modalidades para áudio e texto
     this.updateSession({
@@ -379,16 +380,13 @@ class WebSocketManager {
    * @param {Int16Array} audioData - Dados de áudio PCM16
    */
   appendAudioBuffer(audioData) {
-    // Calcular duração aproximada em ms
-    const durationMs = (audioData.length / this.sampleRate) * 1000;
-    this.audioBufferSize += audioData.length * 2; // 2 bytes por amostra em PCM16
+    if (!this.isConnected) {
+      logger.warning("Não conectado ao servidor, não é possível enviar áudio");
+      return null;
+    }
 
-    // Log para debug
-    logger.info(
-      `Adicionando ${durationMs.toFixed(2)}ms ao buffer (total: ${
-        this.audioBufferSize
-      } bytes)`
-    );
+    // Incrementa o contador de buffers pendentes
+    this.pendingAudioBuffers++;
 
     // Converte para base64
     const base64Audio = this.arrayToBase64(audioData);
@@ -398,6 +396,9 @@ class WebSocketManager {
       audio: base64Audio,
     };
 
+    // Log mais detalhado para depuração
+    logger.debug(`Enviando buffer de áudio (${audioData.length} amostras)`);
+
     return this.sendMessage(message);
   }
 
@@ -405,26 +406,19 @@ class WebSocketManager {
    * Confirma o buffer de áudio (envia para processamento)
    */
   commitAudioBuffer() {
-    // Verificar se temos áudio suficiente
-    const estimatedDurationMs =
-      (this.audioBufferSize / 2 / this.sampleRate) * 1000;
-
-    if (estimatedDurationMs < this.minAudioBufferMs) {
-      logger.warning(
-        `Buffer de áudio muito pequeno (${estimatedDurationMs.toFixed(
-          2
-        )}ms). Mínimo recomendado: ${this.minAudioBufferMs}ms`
-      );
-      // Mesmo assim, tentamos enviar
+    if (this.pendingAudioBuffers <= 0) {
+      logger.warning("Nenhum buffer de áudio para confirmar");
+      return null;
     }
 
     const message = {
       type: "input_audio_buffer.commit",
     };
 
-    // Resetar tamanho do buffer após commit
-    this.audioBufferSize = 0;
+    // Resetar o contador de buffers pendentes
+    this.pendingAudioBuffers = 0;
 
+    logger.info("Confirmando buffer de áudio para processamento");
     return this.sendMessage(message);
   }
 
@@ -436,8 +430,8 @@ class WebSocketManager {
       type: "input_audio_buffer.clear",
     };
 
-    // Resetar tamanho do buffer
-    this.audioBufferSize = 0;
+    // Resetar o contador de buffers pendentes
+    this.pendingAudioBuffers = 0;
 
     return this.sendMessage(message);
   }
