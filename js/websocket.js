@@ -8,7 +8,7 @@ class WebSocketManager {
   constructor(serverUrl) {
     // Estado da conexão
     this.socket = null;
-    this.serverUrl = serverUrl || "ws://localhost:8080/";
+    this.serverUrl = serverUrl || "ws://localhost:8081/";
     this.isConnected = false;
     this.isConnecting = false;
     this.eventId = 0;
