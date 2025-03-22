@@ -1,0 +1,23 @@
+{
+    "name": "openai-realtime-client",
+    "version": "1.0.0",
+    "description": "Cliente web para a API OpenAI Realtime",
+    "main": "index.html",
+    "scripts": {
+      "start": "http-server -p 3000",
+      "dev": "http-server -c-1 -p 3000"
+    },
+    "keywords": [
+      "openai",
+      "realtime",
+      "api",
+      "websocket",
+      "audio",
+      "streaming"
+    ],
+    "author": "Patrick Arte",
+    "license": "MIT",
+    "devDependencies": {
+      "http-server": "^14.1.1"
+    }
+  }
