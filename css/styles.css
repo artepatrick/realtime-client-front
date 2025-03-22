@@ -1,0 +1,307 @@
+/* Variáveis - Paleta Dracula */
+:root {
+    --background: #282a36;
+    --current-line: #44475a;
+    --selection: #44475a;
+    --foreground: #f8f8f2;
+    --comment: #6272a4;
+    --cyan: #8be9fd;
+    --green: #50fa7b;
+    --orange: #ffb86c;
+    --pink: #ff79c6;
+    --purple: #bd93f9;
+    --red: #ff5555;
+    --yellow: #f1fa8c;
+}
+
+/* Reset e Estilos Gerais */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Fira Code', monospace;
+    background-color: var(--background);
+    color: var(--foreground);
+    line-height: 1.6;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+/* Header */
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--selection);
+    margin-bottom: 20px;
+}
+
+header h1 {
+    color: var(--purple);
+    font-size: 1.8rem;
+}
+
+.connection-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 10px;
+    border-radius: 20px;
+    font-size: 0.9rem;
+    background-color: var(--current-line);
+}
+
+.status-icon {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.offline .status-icon {
+    background-color: var(--red);
+}
+
+.connecting .status-icon {
+    background-color: var(--yellow);
+    animation: blink 1s infinite;
+}
+
+.online .status-icon {
+    background-color: var(--green);
+}
+
+.offline {
+    border: 1px solid var(--red);
+}
+
+.connecting {
+    border: 1px solid var(--yellow);
+}
+
+.online {
+    border: 1px solid var(--green);
+}
+
+/* Main Content */
+main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+/* Chat Container */
+.chat-container {
+    flex: 1;
+    background-color: var(--current-line);
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    min-height: 300px;
+}
+
+.chat-messages {
+    height: 100%;
+    padding: 15px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.message {
+    padding: 10px 15px;
+    border-radius: 8px;
+    max-width: 80%;
+    animation: fadeIn 0.3s ease-out;
+}
+
+.user-message {
+    background-color: var(--comment);
+    align-self: flex-end;
+}
+
+.assistant-message {
+    background-color: var(--selection);
+    align-self: flex-start;
+    border-left: 4px solid var(--purple);
+}
+
+/* Voice Controls */
+.voice-controls {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+    margin: 20px 0;
+}
+
+/* Log Container */
+.log-container {
+    background-color: var(--current-line);
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    max-height: 250px;
+    display: flex;
+    flex-direction: column;
+}
+
+.log-header {
+    background-color: var(--selection);
+    padding: 10px 15px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--comment);
+}
+
+.log-header h3 {
+    color: var(--cyan);
+    font-size: 1rem;
+}
+
+.log-content {
+    padding: 10px 15px;
+    overflow-y: auto;
+    flex: 1;
+    font-family: 'Fira Code', monospace;
+    font-size: 0.9rem;
+}
+
+.log-entry {
+    margin-bottom: 5px;
+    border-left: 3px solid transparent;
+    padding-left: 10px;
+    animation: slideIn 0.2s ease;
+}
+
+.log-info {
+    border-color: var(--cyan);
+}
+
+.log-success {
+    border-color: var(--green);
+}
+
+.log-warning {
+    border-color: var(--yellow);
+}
+
+.log-error {
+    border-color: var(--red);
+}
+
+.timestamp {
+    color: var(--comment);
+    margin-right: 8px;
+    font-size: 0.8rem;
+}
+
+/* Buttons */
+.btn {
+    background-color: var(--selection);
+    color: var(--foreground);
+    border: none;
+    padding: 10px 20px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-family: inherit;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.btn:hover {
+    filter: brightness(1.2);
+}
+
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn.primary {
+    background-color: var(--purple);
+}
+
+.btn.success {
+    background-color: var(--green);
+    color: var(--background);
+}
+
+.btn.danger {
+    background-color: var(--red);
+}
+
+.btn.mini {
+    padding: 5px 10px;
+    font-size: 0.8rem;
+    background-color: var(--comment);
+}
+
+/* Footer */
+footer {
+    margin-top: auto;
+    text-align: center;
+    padding-top: 20px;
+    color: var(--comment);
+    font-size: 0.9rem;
+}
+
+/* Recording Animation */
+@keyframes recording {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.2); }
+    100% { transform: scale(1); }
+}
+
+.recording {
+    animation: recording 1.5s infinite;
+}
+
+/* Fade In Animation */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideIn {
+    from { opacity: 0; transform: translateX(-10px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes blink {
+    0% { opacity: 1; }
+    50% { opacity: 0.3; }
+    100% { opacity: 1; }
+}
+
+/* Responsividade */
+@media (max-width: 768px) {
+    header {
+        flex-direction: column;
+        gap: 15px;
+        align-items: flex-start;
+    }
+    
+    .voice-controls {
+        flex-direction: column;
+    }
+    
+    .message {
+        max-width: 95%;
+    }
+}
