@@ -16,6 +16,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let isRecording = false;
   let currentUserMessage = "";
   let currentAssistantMessage = "";
+  let audioBufferSent = false;
 
   // Inicializa o sistema de áudio
   audioManager.initialize().then((initialized) => {
@@ -71,13 +72,65 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   // Configura os callbacks do AudioManager
+  let audioDataBuffer = []; // Buffer para acumular dados de áudio
+  let bufferTimeoutId = null; // ID do timeout para enviar buffer
+
   audioManager.onAudioData = (audioData) => {
-    // Envia os dados de áudio para o servidor
-    webSocketManager.appendAudioBuffer(audioData);
+    // Adicionar os dados ao buffer
+    audioDataBuffer.push(audioData);
+
+    // Armazenar quantidade aproximada de áudio acumulado
+    const durationMs = (audioData.length / audioManager.sampleRate) * 1000;
+    logger.info(`Adicionando ${durationMs.toFixed(2)}ms de áudio ao buffer`);
+
+    // Se já temos buffer agendado para envio, cancelar
+    if (bufferTimeoutId) {
+      clearTimeout(bufferTimeoutId);
+    }
+
+    // Enviar o buffer para o servidor a cada 500ms
+    bufferTimeoutId = setTimeout(() => {
+      if (audioDataBuffer.length > 0) {
+        // Calcular o tamanho total necessário
+        let totalLength = 0;
+        for (const buffer of audioDataBuffer) {
+          totalLength += buffer.length;
+        }
+
+        // Criar buffer combinado
+        const combinedBuffer = new Int16Array(totalLength);
+        let offset = 0;
+
+        for (const buffer of audioDataBuffer) {
+          combinedBuffer.set(buffer, offset);
+          offset += buffer.length;
+        }
+
+        // Enviar para o servidor
+        webSocketManager.appendAudioBuffer(combinedBuffer);
+        audioBufferSent = true;
+
+        // Log da quantidade enviada
+        const totalDurationMs = (totalLength / audioManager.sampleRate) * 1000;
+        logger.info(
+          `Enviando ${totalDurationMs.toFixed(2)}ms de áudio acumulado`
+        );
+
+        // Limpar o buffer
+        audioDataBuffer = [];
+      }
+    }, 300); // Enviar a cada 300ms
   };
 
   audioManager.onRecordingStart = () => {
     isRecording = true;
+    audioBufferSent = false;
+    audioDataBuffer = []; // Limpar buffer anterior
+
+    if (bufferTimeoutId) {
+      clearTimeout(bufferTimeoutId);
+      bufferTimeoutId = null;
+    }
 
     // Atualiza a UI
     startBtn.classList.add("recording");
@@ -92,6 +145,35 @@ document.addEventListener("DOMContentLoaded", () => {
   audioManager.onRecordingStop = () => {
     isRecording = false;
 
+    // Enviar qualquer áudio restante no buffer
+    if (audioDataBuffer.length > 0) {
+      let totalLength = 0;
+      for (const buffer of audioDataBuffer) {
+        totalLength += buffer.length;
+      }
+
+      const combinedBuffer = new Int16Array(totalLength);
+      let offset = 0;
+
+      for (const buffer of audioDataBuffer) {
+        combinedBuffer.set(buffer, offset);
+        offset += buffer.length;
+      }
+
+      // Enviar para o servidor
+      webSocketManager.appendAudioBuffer(combinedBuffer);
+      audioBufferSent = true;
+
+      // Limpar o buffer
+      audioDataBuffer = [];
+    }
+
+    // Cancelar timeout pendente
+    if (bufferTimeoutId) {
+      clearTimeout(bufferTimeoutId);
+      bufferTimeoutId = null;
+    }
+
     // Atualiza a UI
     startBtn.classList.remove("recording");
     startBtn.disabled = false;
@@ -102,7 +184,13 @@ document.addEventListener("DOMContentLoaded", () => {
     updateUserMessage(currentUserMessage);
 
     // Confirma o buffer de áudio com o servidor (quando em modo manual)
-    webSocketManager.commitAudioBuffer();
+    // Só confirma se tiver enviado áudio
+    if (audioBufferSent) {
+      webSocketManager.commitAudioBuffer();
+      audioBufferSent = false;
+    } else {
+      logger.warning("Nenhum áudio foi enviado nesta gravação");
+    }
   };
 
   // Configura os event listeners dos botões

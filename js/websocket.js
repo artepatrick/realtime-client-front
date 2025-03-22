@@ -23,6 +23,11 @@ class WebSocketManager {
     this.conversationId = null;
     this.currentResponseId = null;
 
+    // Buffer de áudio
+    this.audioBufferSize = 0; // Tamanho atual do buffer em bytes
+    this.minAudioBufferMs = 100; // Mínimo requerido pela API (100ms)
+    this.sampleRate = 24000; // Sample rate em Hz
+
     // Referência para os elementos da UI
     this.statusElement = document.querySelector(".connection-status");
 
@@ -92,6 +97,7 @@ class WebSocketManager {
     this.sessionId = null;
     this.conversationId = null;
     this.currentResponseId = null;
+    this.audioBufferSize = 0;
 
     // Chamar o callback de desconexão
     if (this.onDisconnect) {
@@ -283,7 +289,7 @@ class WebSocketManager {
    */
   handleSessionCreated(data) {
     this.sessionId = data.session.id;
-    logger.success(`Sessão criada: ${this.sessionId}`);
+    logger.success(`Sessão OpenAI criada: ${this.sessionId}`);
 
     // Configura as modalidades para áudio e texto
     this.updateSession({
@@ -373,6 +379,17 @@ class WebSocketManager {
    * @param {Int16Array} audioData - Dados de áudio PCM16
    */
   appendAudioBuffer(audioData) {
+    // Calcular duração aproximada em ms
+    const durationMs = (audioData.length / this.sampleRate) * 1000;
+    this.audioBufferSize += audioData.length * 2; // 2 bytes por amostra em PCM16
+
+    // Log para debug
+    logger.info(
+      `Adicionando ${durationMs.toFixed(2)}ms ao buffer (total: ${
+        this.audioBufferSize
+      } bytes)`
+    );
+
     // Converte para base64
     const base64Audio = this.arrayToBase64(audioData);
 
@@ -388,9 +405,25 @@ class WebSocketManager {
    * Confirma o buffer de áudio (envia para processamento)
    */
   commitAudioBuffer() {
+    // Verificar se temos áudio suficiente
+    const estimatedDurationMs =
+      (this.audioBufferSize / 2 / this.sampleRate) * 1000;
+
+    if (estimatedDurationMs < this.minAudioBufferMs) {
+      logger.warning(
+        `Buffer de áudio muito pequeno (${estimatedDurationMs.toFixed(
+          2
+        )}ms). Mínimo recomendado: ${this.minAudioBufferMs}ms`
+      );
+      // Mesmo assim, tentamos enviar
+    }
+
     const message = {
       type: "input_audio_buffer.commit",
     };
+
+    // Resetar tamanho do buffer após commit
+    this.audioBufferSize = 0;
 
     return this.sendMessage(message);
   }
@@ -402,6 +435,9 @@ class WebSocketManager {
     const message = {
       type: "input_audio_buffer.clear",
     };
+
+    // Resetar tamanho do buffer
+    this.audioBufferSize = 0;
 
     return this.sendMessage(message);
   }

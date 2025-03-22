@@ -14,6 +14,11 @@ class AudioManager {
     this.audioQueue = [];
     this.isPlaying = false;
 
+    // Buffer de áudio acumulado
+    this.audioBuffer = [];
+    this.bufferDuration = 0; // Duração em ms
+    this.minBufferDuration = 100; // Mínimo de 100ms conforme exigido pela API
+
     // Eventos
     this.onAudioData = null; // Callback para quando temos dados de áudio para enviar
     this.onRecordingStart = null;
@@ -54,6 +59,9 @@ class AudioManager {
     }
 
     try {
+      // Limpar buffer anterior
+      this.clearAudioBuffer();
+
       // Solicitar acesso ao microfone
       this.mediaStream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -86,9 +94,18 @@ class AudioManager {
         // Converter para Int16 (PCM16)
         const pcmData = this.floatTo16BitPCM(inputData);
 
-        // Enviar os dados de áudio via callback
-        if (this.onAudioData) {
-          this.onAudioData(pcmData);
+        // Acumular no buffer
+        this.accumulate(pcmData);
+
+        // Se temos dados suficientes, enviar via callback
+        if (this.bufferDuration >= this.minBufferDuration && this.onAudioData) {
+          // Criar uma cópia combinada de todo o buffer acumulado
+          const combinedBuffer = this.getCombinedBuffer();
+          this.onAudioData(combinedBuffer);
+
+          // Limpar o buffer acumulado após enviar
+          // Comentado para acumular mais áudio - temos que avaliar o comportamento
+          // this.clearAudioBuffer();
         }
       };
 
@@ -112,6 +129,54 @@ class AudioManager {
       logger.error(`Erro ao iniciar gravação: ${error.message}`);
       return false;
     }
+  }
+
+  /**
+   * Acumula dados de áudio no buffer e calcula a duração
+   * @param {Int16Array} pcmData - Dados de áudio PCM
+   */
+  accumulate(pcmData) {
+    this.audioBuffer.push(pcmData);
+
+    // Calcular a duração em milissegundos
+    // Cada amostra a 24kHz = 1/24000 segundos
+    const durationMs = (pcmData.length / this.sampleRate) * 1000;
+    this.bufferDuration += durationMs;
+
+    // Log para debug
+    logger.info(`Buffer acumulado: ${this.bufferDuration.toFixed(2)}ms`);
+  }
+
+  /**
+   * Combina todos os buffers acumulados em um único buffer
+   * @returns {Int16Array} - Buffer combinado
+   */
+  getCombinedBuffer() {
+    // Calcular o tamanho total
+    let totalLength = 0;
+    for (const buffer of this.audioBuffer) {
+      totalLength += buffer.length;
+    }
+
+    // Criar um novo buffer combinado
+    const combinedBuffer = new Int16Array(totalLength);
+
+    // Copiar os dados
+    let offset = 0;
+    for (const buffer of this.audioBuffer) {
+      combinedBuffer.set(buffer, offset);
+      offset += buffer.length;
+    }
+
+    return combinedBuffer;
+  }
+
+  /**
+   * Limpa o buffer de áudio acumulado
+   */
+  clearAudioBuffer() {
+    this.audioBuffer = [];
+    this.bufferDuration = 0;
   }
 
   /**
