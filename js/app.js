@@ -22,6 +22,8 @@ document.addEventListener("DOMContentLoaded", () => {
   audioManager.initialize().then((initialized) => {
     if (!initialized) {
       logger.error("Falha ao inicializar o sistema de áudio");
+    } else {
+      logger.success("Sistema de áudio inicializado com sucesso");
     }
   });
 
@@ -71,6 +73,8 @@ document.addEventListener("DOMContentLoaded", () => {
     if (audioData) {
       logger.debug(`Dados de áudio recebidos: ${audioData.length} bytes`);
       audioManager.enqueueAudio(audioData);
+    } else {
+      logger.warning("Dados de áudio vazios recebidos do servidor");
     }
   };
 
