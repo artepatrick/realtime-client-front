@@ -95,7 +95,7 @@ class AudioManager {
         const inputData = inputBuffer.getChannelData(0);
 
         // Verificar se há dados de áudio (não silêncio total)
-        const hasAudio = inputData.some((sample) => Math.abs(sample) > 0.01);
+        const hasAudio = inputData.some((sample) => Math.abs(sample) > 0.1);
 
         if (hasAudio) {
           // Converter para Int16 (PCM16) - formato requerido pela API
